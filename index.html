@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartPlanner - Інтелектуальний планувальник</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        :root {
+            --gold-1: #ffd700;
+            --gold-2: #daa520;
+            --dark-bg: #1a1a1a;
+        }
+
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #2c2c2c, #1a1a1a);
+            color: #fff;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            padding: 40px 0;
+            background: linear-gradient(45deg, var(--gold-1), var(--gold-2));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .task-form {
+            background: rgba(255, 215, 0, 0.1);
+            padding: 30px;
+            border-radius: 15px;
+            margin: 20px 0;
+            border: 1px solid var(--gold-1);
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid var(--gold-1);
+            border-radius: 8px;
+            color: #fff;
+            margin-top: 8px;
+        }
+
+        .gold-btn {
+            background: linear-gradient(45deg, var(--gold-1), var(--gold-2));
+            color: #1a1a1a;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: transform 0.3s;
+        }
+
+        .tasks-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .task-card {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 20px;
+            border-radius: 12px;
+            position: relative;
+            border-left: 4px solid var(--gold-1);
+            transition: transform 0.3s;
+        }
+
+        .task-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .priority-high { border-color: #ff4444; }
+        .priority-medium { border-color: #44ff44; }
+        .priority-low { border-color: #4444ff; }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .fade-in {
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        .completed {
+            opacity: 0.6;
+            background: rgba(255, 255, 255, 0.02);
+            border-left-color: #666 !important;
+        }
+
+        .completed h3 {
+            text-decoration: line-through;
+        }
+
+        .deadline-status {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 0.8em;
+            padding: 5px 10px;
+            border-radius: 5px;
+        }
+
+        .overdue {
+            background: #ff4444;
+            color: white;
+        }
+
+        .urgent {
+            background: #ffd700;
+            color: #1a1a1a;
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 25px;
+            border-radius: 8px;
+            background: rgba(255, 215, 0, 0.9);
+            color: #1a1a1a;
+            z-index: 1000;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        .notification.error { background: rgba(255, 68, 68, 0.9); color: white; }
+        .notification.warning { background: rgba(255, 165, 0, 0.9); }
+        .notification.success { background: rgba(68, 255, 68, 0.9); color: #1a1a1a; }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); }
+            to { transform: translateX(0); }
+        }
+
+        .task-actions {
+            margin-top: 15px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header fade-in">
+            <h1>SmartPlanner</h1>
+            <p>Інтелектуальний планувальник із аналізом пріоритетів</p>
+        </header>
+
+        <section class="task-form fade-in">
+            <form id="taskForm">
+                <div class="form-group">
+                    <label>Назва завдання:</label>
+                    <input type="text" id="taskName" required>
+                </div>
+                <div class="form-group">
+                    <label>Дедлайн:</label>
+                    <input type="datetime-local" id="taskDeadline" required>
+                </div>
+                <div class="form-group">
+                    <label>Пріоритет:</label>
+                    <select id="taskPriority">
+                        <option value="high">Високий</option>
+                        <option value="medium">Середній</option>
+                        <option value="low">Низький</option>
+                    </select>
+                </div>
+                <button type="submit" class="gold-btn">Додати завдання <i class="fas fa-plus"></i></button>
+            </form>
+        </section>
+
+        <section class="tasks-container" id="tasksList"></section>
+    </div>
+
+    <script>
+        class TaskManager {
+            constructor() {
+                this.tasks = JSON.parse(localStorage.getItem('tasks')) || [];
+            }
+
+            addTask(task) {
+                this.tasks.push(task);
+                this._saveToLocalStorage();
+            }
+
+            deleteTask(id) {
+                this.tasks = this.tasks.filter(task => task.id !== id);
+                this._saveToLocalStorage();
+            }
+
+            toggleComplete(id) {
+                this.tasks = this.tasks.map(task => {
+                    if(task.id === id) {
+                        return {...task, completed: !task.completed};
+                    }
+                    return task;
+                });
+                this._saveToLocalStorage();
+            }
+
+            getSortedTasks() {
+                return this.tasks.sort((a, b) => {
+                    const priorityOrder = {high: 1, medium: 2, low: 3};
+                    if(priorityOrder[a.priority] !== priorityOrder[b.priority]) {
+                        return priorityOrder[a.priority] - priorityOrder[b.priority];
+                    }
+                    return new Date(a.deadline) - new Date(b.deadline);
+                });
+            }
+
+            _saveToLocalStorage() {
+                localStorage.setItem('tasks', JSON.stringify(this.tasks));
+            }
+        }
+
+        const taskManager = new TaskManager();
+        const taskForm = document.getElementById('taskForm');
+        const tasksList = document.getElementById('tasksList');
+
+        document.addEventListener('DOMContentLoaded', () => {
+            renderTasks();
+            setupValidation();
+            checkDeadlines();
+            setInterval(checkDeadlines, 60000);
+        });
+
+        taskForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            if(!validateForm()) return;
+
+            const task = {
+                id: Date.now(),
+                name: document.getElementById('taskName').value.trim(),
+                deadline: document.getElementById('taskDeadline').value,
+                priority: document.getElementById('taskPriority').value,
+                completed: false
+            };
+
+            taskManager.addTask(task);
+            renderTasks();
+            taskForm.reset();
+            showNotification('Завдання успішно додано!', 'success');
+        });
+
+        function renderTasks() {
+            const tasks = taskManager.getSortedTasks();
+            tasksList.innerHTML = tasks.map(task => `
+                <div class="task-card priority-${task.priority} fade-in ${task.completed ? 'completed' : ''}">
+                    <h3>${task.name}</h3>
+                    <p>Дедлайн: ${formatDateTime(task.deadline)}</p>
+                    <p>Пріоритет: ${getPriorityLabel(task.priority)}</p>
+                    <div class="task-actions">
+                        <button onclick="toggleComplete(${task.id})" class="gold-btn">
+                            ${task.completed ? 'Відновити <i class="fas fa-undo"></i>' : 'Завершити <i class="fas fa-check"></i>'}
+                        </button>
+                        <button onclick="deleteTask(${task.id})" class="gold-btn">
+                            <i class="fas fa-trash"></i> Видалити
+                        </button>
+                    </div>
+                    ${getDeadlineStatus(task.deadline)}
+                </div>
+            `).join('');
+        }
+
+        function formatDateTime(dateString) {
+            const options = {
+                year: 'numeric', month: 'numeric', day: 'numeric',
+                hour: '2-digit', minute: '2-digit'
+            };
+            return new Date(dateString).toLocaleString('uk-UA', options);
+        }
+
+        function getPriorityLabel(priority) {
+            const labels = {high: 'Високий', medium: 'Середній', low: 'Низький'};
+            return labels[priority];
+        }
+
+        function getDeadlineStatus(deadline) {
+            const now = new Date();
+            const taskDate = new Date(deadline);
+            const diff = taskDate - now;
+            
+            if(diff < 0) return '<span class="deadline-status overdue">Протерміновано</span>';
+            if(diff < 3600000) return '<span class="deadline-status urgent">Менше 1 години!</span>';
+            return '';
+        }
+
+        function setupValidation() {
+            const taskName = document.getElementById('taskName');
+            const taskDeadline = document.getElementById('taskDeadline');
+
+            taskName.addEventListener('input', () => {
+                taskName.setCustomValidity('');
+            });
+
+            taskDeadline.addEventListener('input', () => {
+                const selectedDate = new Date(taskDeadline.value);
+                if(selectedDate < new Date()) {
+                    taskDeadline.setCustomValidity('Дедлайн не може бути у минулому');
+                } else {
+                    taskDeadline.setCustomValidity('');
+                }
+            });
+        }
+
+        function validateForm() {
+            const taskName = document.getElementById('taskName').value.trim();
+            if(!taskName) {
+                showNotification('Будь ласка, введіть назву завдання', 'error');
+                return false;
+            }
+            return true;
+        }
+
+        function showNotification(message, type = 'info') {
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.textContent = message;
+            document.body.appendChild(notification);
+
+            setTimeout(() => {
+                notification.remove();
+            }, 3000);
+        }
+
+        function checkDeadlines() {
+            const now = new Date();
+            taskManager.getSortedTasks().forEach(task => {
+                const deadline = new Date(task.deadline);
+                const diff = deadline - now;
+                
+                if(!task.completed && diff > 0 && diff < 3600000) {
+                    showNotification(`Увага! Завдання "${task.name}" має дедлайн менше ніж через годину!`, 'warning');
+                }
+            });
+        }
+
+        window.toggleComplete = function(id) {
+            taskManager.toggleComplete(id);
+            renderTasks();
+            showNotification('Статус завдання оновлено', 'success');
+        }
+
+        window.deleteTask = function(id) {
+            if(confirm('Ви впевнені, що хочете видалити це завдання?')) {
+                taskManager.deleteTask(id);
+                renderTasks();
+                showNotification('Завдання видалено', 'info');
+            }
+        }
+    </script>
+</body>
+</html>
